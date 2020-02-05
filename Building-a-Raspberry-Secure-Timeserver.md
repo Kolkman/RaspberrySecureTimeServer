@@ -11,7 +11,7 @@ This setup uses
 * a raspberry pi 3 B+
 * a [Uputronics Rasberry Pi+ GPS Expansion board ][] (version 4.1 from 2016)
 * an active GPS antenna with an SMA male connector.
-* [Uputronics Rasberry Pi+ GPS Expansion board ]: https://store.uputronics.com/index.php?route=product/product&path=60_64&product_id=81 " Uputronics Rasberry Pi+ GPS Expansion board"
+
 
 Hardware assembly is straightforward: plug the gpio header on top of the raspberry pi pins, then plug the board with the capacitor up on top of the header. Fix the lot using the small metal screws.
 
@@ -28,7 +28,7 @@ There is a bunch of software that needs  to be installed in order to perform all
 
     $ sudo apt-get install pps-tools git scons libncurses-dev python-dev \
     bc libcap-dev nettle-dev libgnutls28-dev libreadline-dev bison \
-	asciidoctor cpufrequtils certbot
+	asciidoctor cpufrequtils certbot  pps-tools
 
 
 ## Configuring GPS and PPS
@@ -49,7 +49,8 @@ Now that bluetooth is disabled we can disable the bluetooth deamon as well:
 
 Create a symlink to the GPS device to make it easier to refer to. Put the following in a new file `/etc/udev/rules.d/10-pps.rules` to accomplish this.
 
-    KERNEL=="ttyAMA0", SYMLINK+="gpsd0"
+KERNEL=="ttyAMA0", SYMLINK+="gps0", MODE="0666"
+KERNEL=="pps0", SYMLINK+="gpspps0", MODE="0666"
 
 
 Edit the file `/boot/cmdline.txt`, and remove the following from the single line in the file:
@@ -148,20 +149,40 @@ All the setup above resulted in us being able to read out the GPS data that is d
 
 If you get stuck here see [the relevant section in the NTFs howto](https://www.ntpsec.org/white-papers/stratum-1-microserver-howto/#_smoke_test_the_gps_hat_combination)
 
+The output above is in formated as  [NMEA data ](https://www.gpsinformation.org/dale/nmea.htm)
+
+
 ## Building GPSD
 
 GPSD is needed to get a reasonable wall-clock that in combination with the PPS signal will get us to a milisecond precision server.
 
-The [Network Time Foundation Stratum-1-Microserver HOWTO][] suggests to build the deamon yourself.  So we follow their instructions i.e. clone the git repository and build it.
+GPSD comes as a raspian package.
+
+	$ apt install gpsd
+
+will do the trick and install the gpsd deamon. For gpsmon you will
+have to install the  gpsd-clients package:
+
+	$ apt insall  gpsd-clients
+
+Alternatively: The [Network Time Foundation Stratum-1-Microserver HOWTO][] suggests to build the deamon yourself.  So we follow their instructions i.e. clone the git repository and build it.
 
     $ git clone git://git.savannah.nongnu.org/gpsd.git
     $ cd gpsd
     $ scons timeservice=yes magic_hat=yes nmea0183=yes ublox=yes mtk3301=yes fixed_port_speed=9600 fixed_stop_bits=1
 	$ sudo scons udev-install
 
-Once you build everything you can test the lot with `gpsmon` which wil show you a good overview of visible satelites, your location and the time.
 
-    $ sudo ./gpsmon /dev/gpsd0
+Once you intalled or build everything you can test the lot with
+`gpsmon` which wil show you a good overview of visible satelites, your
+location and the time.
+
+Start the gps deamon:
+
+	$ gpsd -n /dev/gpsd0 
+
+Test your setup:
+	$ sudo gpsmon /dev/gpsd0
 
 
     timeserv:/dev/gpsd0 9600 8N1  NMEA0183>
@@ -240,19 +261,17 @@ After installing Chrony (default install location `/usr/local`) you should edit 
     
     # set larger delay to allow the NMEA source to overlap with
     # the other sources and avoid the falseticker status
-    refclock SHM 0 refid GPS precision 1e-1  delay 0.2
-    refclock SOCK /var/run/chrony.gpsd0.sock refid PPS
+	refclock SHM 0 delay 0.5 refid NMEA
+	refclock SOCK /var/run/chrony.gpsd0.sock refid PPS lock NMEA prefer
 
 
-TODO: a proper starting script
+## Starting the lot.
 
+See the systemd startup files elsewhere in this repository.
 
-    # killall -9 gpsd chronyd
-    # chronyd -f /etc/chrony.conf
-    # sleep 2
-    # gpsd -n /dev/gpsd0
-    # sleep 2
-    # cgps
+lib/systemd/system/chrony.service
+and the defaults for gpsd and chrony in  etc/defaults
+
 
 ## Turning on NTS security.
 
@@ -291,10 +310,137 @@ Use openssl in client mode to test if your server speaks TLS1.3:
     openssl s_client -tls1_3 -connect timemaster.example.com:11443
 
 
+## Reducing GPS dependency ##
+
+The above setup will get you a fully working Chrony install with PPS
+from the GPS system. In this section I dive a little bit deeper into 
+
+The  a [Uputronics Rasberry Pi+ GPS Expansion board ][] features an
+uBlox 80M8 receiver that also deals with Galileo data.
+"[A Raspberry PI Stratum 1 NTP Server][]" blogpost by Phil Randall
+describes how to enable Galileo as the timesource. Below we are
+_rebuilding_ our setup to enable Galileo.
+
+### Install gpsctl.git ###
+
+the gpsd package comes with a gpsctl program. But that is not the one
+we need. We need gpsctl as developed by
+[Tom Dilatush](http://www.jamulblog.com/2017/11/paradise-ponders-gpsctl-functionally.html)
+and customised by Phil Randal.
+
+
+	$ git clone https://github.com/philrandal/gpsctl.git
+	$ sudo apt install wiringpi
+	$ cd gpsctl
+	$ ./build.sh
+	$ sudo cp gpsctl /usr/local/bin/
+
+Kill the gpsd server and test whether the package works:
+
+	sudo systemctl stop gpsd.service 
+    sudo /usr/local/bin/gpsctl --port=/dev/gpsd0 --baud 9600 -Q version
+    Software version: ROM CORE 3.01 (107888)
+    Hardware version: 00080000
+           Extension: FWVER=SPG 3.01
+           Extension: PROTVER=18.00
+           Extension: GPS;GLO;GAL;BDS
+           Extension: SBAS;IMES;QZSS
+
+(The extentions GPS, GLO, GAL, and BDS show the additional systems
+available).
+
+	sudo /usr/local/bin/gpsctl --port=/dev/gpsd0 --baud 9600 -Q config
+	sudo /usr/local/bin/gpsctl --port=/dev/gpsd0 --baud 9600 -Q sattelites
+	sudo /usr/local/bin/gpsctl --port=/dev/gpsd0 --baud 9600 -Q fix
+
+
+I copied the config file from Phil's blog (also in my repo under
+etc/gpsctl.conf ) and the ublox-init.service file. However make sure
+you modify the line with ntp.service to
+
+	Before=chrony.service
+
+Disable the gpsd servie and enable the ublox-init.service
+
+	sudo systemctl disable gpsd.service
+	sudo systemctl enable ublox-init.service
+
+
+Now remove the refclocks SHM and SOCK and replace it by the PPS driver
+    #refclock SHM 0 refid GPS delay 0.5 refid NMEA                                                         
+    #refclock SOCK /var/run/chrony.gpsd0.sock refid PPS lock GPS prefer                                    
+    
+    refclock PPS /dev/pps0 refid PPS lock GPS
+
+Now you will need another server to give you a time for the PPS to
+lock to. Just add a few secured servers to your chrony.conf
+
+    #All secured servrers
+    server time.cloudflare.com nts ntsport 1234 iburst 
+    server nts.ntp.se nts ntsport 4443 iburst
+    server nts.sth1.ntp.se nts ntsport 4443 iburst
+    server nts.sth2.ntp.se nts ntsport 4443 iburst
+
+Now check what satelites contribute to the time (nice eh)
+
+    $ sudo /usr/local/bin/gpsctl  --port=/dev/gps0 -Q satellites
+    
+    GNSS     ID CNo  El Azi   PRr Signal qual         Sat Hlt Orbit Src      Flags
+    ======= === === === === ===== =================== ======= ============== =====
+    GPS      29  49  21  84  -3.3 Code/carrier locked Ok      Ephemeris      uea
+    GLONASS  11  49  39 190  -3.2 Code/carrier locked Ok      Ephemeris      uea
+    GPS      21  34  71  93  12.0 Code/carrier locked Ok      Ephemeris      uea
+    Galileo  13  34  29  58  -5.8 Code/carrier locked Ok      Ephemeris      uea
+    GPS      26  33  71 201   8.7 Code/carrier locked Ok      Ephemeris      uea
+    Galileo  26  32  82  96  -8.2 Code/carrier locked Ok      Ephemeris      uea
+    GLONASS  12  30  62 275   5.6 Code/carrier locked Ok      Ephemeris      uea
+    GLONASS  13  29  21 330 -11.8 Code/carrier locked Ok      Ephemeris      uea
+    GPS      16  28  66 287  -5.2 Code/carrier locked Ok      Ephemeris      uea
+    Galileo   1  27  60 197   7.4 Code/carrier locked Ok      Ephemeris      uea
+    GLONASS  21  24  60  41  -7.2 Code locked         Ok      Ephemeris      uea
+    GLONASS  22  21  54 259  -4.9 Code locked         Ok      Ephemeris      uea
+    Galileo  31  19  47 299   8.4 Code locked         Ok      Ephemeris      uea
+    GLONASS   5  10  22  44   1.2 Code locked         Ok      Ephemeris      uea
+    GPS      31  44  11 201   0.7 Code/carrier locked Ok      Ephemeris      a
+    Galileo  21  41  16 159  -0.3 Code/carrier locked Ok      Ephemeris      a
+    GPS      20  39  28 141  -4.2 Code/carrier locked Ok      Ephemeris      a
+    Galileo   8  38   7  64  -6.1 Code/carrier locked Ok      Ephemeris      a
+    GPS       8  36   3 271  -9.6 Code/carrier locked Ok      Ephemeris      a
+    GPS      10  35   6 161   7.7 Code/carrier locked Ok      Ephemeris      a
+    GPS       7  34   2 341   7.5 Code/carrier locked Ok      Ephemeris      a
+    GLONASS   6  34  11 101  10.1 Code/carrier locked Ok      Ephemeris      a
+    GPS       5  31   6  24  -2.6 Code/carrier locked Ok      Ephemeris      a
+    GLONASS   4  28   8 356   2.3 Code/carrier locked Ok      Ephemeris      a
+    Galileo  33  26  40 231 -12.8 Code locked         Ok      Ephemeris      a
+    GLONASS  20  19   6  57  -0.8 Code locked         Ok      Ephemeris      a
+    GPS      27   0  34 273   0.0 Searching           Ok      Ephemeris      a
+    Galileo   3   0   6  16   0.0 Searching           Ok      Ephemeris      a
+    Galileo  24   0   2 323   0.0 None                Ok      Almanac        a
+    
+    Flags:
+      u - used for navigation fix
+      d - differential correction is available
+      s - carrier-smoothed pseudorange used
+      e - ephemeris is available
+      a - almanac is available
+      S - SBAS corrections used
+      R - RTCM corrections used
+      P - pseudorange corrections used
+      C - carrier range corrections used
+      D - range rate (Doppler) corrections used
 
 
 
-## Trouble Shooting
+
+
+
+
+##Trouble Shooting##
+
+
+
+
+###Capturing NTPS data###
 
 Capture useful data.
 
@@ -303,46 +449,61 @@ Capture useful data.
 You really want to write these files to an NFS disk or a attached USB
 drive - wearing out your SD card this way is not a good idea.
 
-Load the capture file into wireshark.
-
+Load the capture file into wireshark. To my knowledge there are no
+discectors yet.
 
 
 ## Background reading ##
 
-There are a great many resources that will help you to get up to speed on NTP, NTP security, and the use of GPS for time keeping on a raspberry pi. Your favorite search engine will be able to find all you need, but if your search skills fail, here are some of the sources we used.
+There are a great many resources that will help you to get up to speed
+on NTP, NTP security, and the use of GPS for time keeping on a
+raspberry pi. Your favorite search engine will be able to find all you
+need, but if your search skills fail, here are some of the sources we
+used.
 
-#### NTP ####
+#### Hardware and software ###
 
-For setting up accurate time with GPS and PPS information there were a few resources I used:
+For setting up accurate time with GPS and PPS information there were a
+few resources I used:
 
 * [Network Time Foundation Stratum-1-Microserver HOWTO][]
 * [GDPS Howto][]
-* This [5 minute guide][] is the authoritiative source to get the [Uputronics Rasberry Pi+ GPS Expansion board ][]  working with NTP. 
-* The [Rasberry Pi as a stratum 1 NTP server][] page on a blog by David and Cecilia Tailor describes how to set up the Pi with a GPS to deliver PPS syncing.
+* This [5 minute guide][] is the authoritiative source to get the
+  [Uputronics Rasberry Pi+ GPS Expansion board ][] working with NTP.
+* The [Rasberry Pi as a stratum 1 NTP server][] page on a blog by
+  David and Cecilia Tailor describes how to set up the Pi with a GPS
+  to deliver PPS syncing.
+* [A Raspberry PI Stratum 1 NTP Server][] by Phil Randall is an
+  exellent and detailed writeup - he describes how to use Galileo as
+  the time source.
+* [The RobotsForRobotics blog on chrony with GPS][] describes how to get PPS working with Chrony
+
 
 
 
 
 #### NTP Security ####
 
-* The [APNIC blog by Martin Langer][] provides a technical overview of how NTP security works. It provides a good background on how a TLS based key exchange is used to provides the authentication cookies that are further used for exchange of messages over UDP.
+* The [APNIC blog by Martin Langer][] provides a technical overview of
+  how NTP security works. It provides a good background on how a TLS
+  based key exchange is used to provides the authentication cookies
+  that are further used for exchange of messages over UDP.
 
-* This [The Netnod NTS Howto][] describes how to set up an NTPS client to get time from their stratum 0 cesium clock in a secure way.
+* This [The Netnod NTS Howto][] describes how to set up an NTPS client
+  to get time from their stratum 0 cesium clock in a secure way.
 
 
 #### Raspberry Pi and GPS boards ####
-The [Ostfalia Raspberry Pi NTP/NTS][] is a seriously cool interface to
-a running PI. The "View filesystem" buttonm exposes some of the configuration.
 
-
-
- 
-
+The [Ostfalia Raspberry Pi NTP/NTS][] is a seriously cool interface to a
+running PI. The "View filesystem" buttonm exposes some of the
+configuration.
 
 
 #### Chrony and PPS ####
 
-* [The RobotsForRobotics blog on chrony with GPS][] describes how to get PPS working with Chrony
+
+
 
 
 
@@ -355,8 +516,7 @@ a running PI. The "View filesystem" buttonm exposes some of the configuration.
 [Rasberry Pi as a stratum 1 NTP server]: https://www.satsignal.eu/ntp/Raspberry-Pi-NTP.html "The Raspberry Pi as a Stratum-1 NTP Server"
 [The Netnod NTS Howto]: https://www.netnod.se/time-and-frequency/how-to-use-nts "How to use NTS"
 [The RobotsForRobotics blog on chrony with GPS]: http://robotsforroboticists.com/chrony-gps-for-time-synchronization/  "chrony with GPS for Time Synchronization "
-
 [GDPS Howto]: https://gpsd.gitlab.io/gpsd/gpsd-time-service-howto.html "GPSD Time Service HOWTO"
-
 [Ostfalia Raspberry Pi NTP/NTS]: http://nts3-e.ostfalia.de/ "Ostfalia's PI"
-
+[A Raspberry PI Stratum 1 NTP Server]: http://www.philrandal.co.uk/blog/archives/2019/04/entry_213.html "Phil's Occasional Blog"
+[Uputronics Rasberry Pi+ GPS Expansion board ]: https://store.uputronics.com/index.php?route=product/product&path=60_64&product_id=81 " Uputronics Rasberry Pi+ GPS Expansion board"
