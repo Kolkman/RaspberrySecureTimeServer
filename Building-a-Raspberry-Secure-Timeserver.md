@@ -123,8 +123,8 @@ and
 
 All the setup above resulted in us being able to read out the GPS data that is delivered every second.. we only need to test that. 
 
-    $ stty -F /dev/gpsd0 raw 9600 cs8 clocal -cstopb
-    $ cat /dev/gpsd0
+    $ stty -F /dev/gpsd raw 9600 cs8 clocal -cstopb
+    $ cat /dev/gps0
     MLMM?i? [...] ??5)?$GNTXT,01,01,01,More than 100 frame errors, UART RX was disabled*70
     $GNRMC,132750.00,A,5221.38193,N,00457.33136,E,1.164,,111219,,,A*63
     $GNVTG,,T,,M,1.164,N,2.155,K,A*3C
@@ -179,13 +179,13 @@ location and the time.
 
 Start the gps deamon:
 
-	$ gpsd -n /dev/gpsd0 
+	$ gpsd -n /dev/gps0 
 
 Test your setup:
-	$ sudo gpsmon /dev/gpsd0
+	$ sudo gpsmon /dev/gps0
 
 
-    timeserv:/dev/gpsd0 9600 8N1  NMEA0183>
+    timeserv:/dev/gps0 9600 8N1  NMEA0183>
     ┌──────────────────────────────────────────────────────────────────────────────┐
     │Time: 2019-12-11T13:51:54.000Z Lat:  52 21.377260' N  Lon:   4 57.376350' E   │
     └───────────────────────────────── Cooked TPV ─────────────────────────────────┘
@@ -262,7 +262,7 @@ After installing Chrony (default install location `/usr/local`) you should edit 
     # set larger delay to allow the NMEA source to overlap with
     # the other sources and avoid the falseticker status
 	refclock SHM 0 delay 0.5 refid NMEA
-	refclock SOCK /var/run/chrony.gpsd0.sock refid PPS lock NMEA prefer
+	refclock SOCK /var/run/chrony.gps0.sock refid PPS lock NMEA prefer
 
 
 ## Starting the lot.
@@ -338,7 +338,7 @@ and customised by Phil Randal.
 Kill the gpsd server and test whether the package works:
 
 	sudo systemctl stop gpsd.service 
-    sudo /usr/local/bin/gpsctl --port=/dev/gpsd0 --baud 9600 -Q version
+    sudo /usr/local/bin/gpsctl --port=/dev/gps0 --baud 9600 -Q version
     Software version: ROM CORE 3.01 (107888)
     Hardware version: 00080000
            Extension: FWVER=SPG 3.01
@@ -349,9 +349,9 @@ Kill the gpsd server and test whether the package works:
 (The extentions GPS, GLO, GAL, and BDS show the additional systems
 available).
 
-	sudo /usr/local/bin/gpsctl --port=/dev/gpsd0 --baud 9600 -Q config
-	sudo /usr/local/bin/gpsctl --port=/dev/gpsd0 --baud 9600 -Q sattelites
-	sudo /usr/local/bin/gpsctl --port=/dev/gpsd0 --baud 9600 -Q fix
+	sudo /usr/local/bin/gpsctl --port=/dev/gps0 --baud 9600 -Q config
+	sudo /usr/local/bin/gpsctl --port=/dev/gps0 --baud 9600 -Q sattelites
+	sudo /usr/local/bin/gpsctl --port=/dev/gps0 --baud 9600 -Q fix
 
 
 I copied the config file from Phil's blog (also in my repo under
@@ -368,7 +368,7 @@ Disable the gpsd servie and enable the ublox-init.service
 
 Now remove the refclocks SHM and SOCK and replace it by the PPS driver
     #refclock SHM 0 refid GPS delay 0.5 refid NMEA                                                         
-    #refclock SOCK /var/run/chrony.gpsd0.sock refid PPS lock GPS prefer                                    
+    #refclock SOCK /var/run/chrony.gps0.sock refid PPS lock GPS prefer                                    
     
     refclock PPS /dev/pps0 refid PPS lock GPS
 
