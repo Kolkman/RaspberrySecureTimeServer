@@ -233,15 +233,16 @@ Test your setup:
 
 Now we will divert from the  [Network Time Foundation Stratum-1-Microserver HOWTO][] as we want to use Chrony as the server - just for code diversity and because the Network Time Foundation NTP server does not yet support Network Time Security.
 
-First download, build and install Chrony with time security.  We will use the [Chrony NTS GIT repository][]
+First download, build and install Chrony with time security (we are using the master branch, as of 4.0 NTS will be available in the release).
+
 
 As a non privileged user perform the following:
-
-    $ git clone https://github.com/mlichvar/chrony-nts
-	$ cd chrony-nts
-	$ ./configure --enable-debug
-	$ make
-	$ sudo make install
+   $ mkdir chrony && cd chrony
+   $ git clone https://git.tuxfamily.org/chrony/chrony.git master
+   $ cd master
+   $ ./configure --enable-debug
+   $ make
+   $ sudo make install
 	
 
 You really want to make sure you configure with debug enabled and  that the Features line in the configure output shows: `+NTS`. That line should, if you installed all packages above, look remarkably similar to:
@@ -437,7 +438,36 @@ Now check what satelites contribute to the time (nice eh)
 
 ##Trouble Shooting##
 
+### No time synchronisation availabe ###
 
+
+
+    $chronyc sourcestats
+    Name/IP Address            NP  NR  Span  Frequency  Freq Skew  Offset  Std Dev
+    ==============================================================================
+    OLAF                       16   3   239     +0.001      0.009    +10ns   619ns
+    time.cloudflare.com        14   9   652     +0.036      0.255   -255us    47us
+    nts.ntp.se                  0   0     0     +0.000   2000.000     +0ns  4000ms
+    2a01:3f7:2:52::10           0   0     0     +0.000   2000.000     +0ns  4000ms
+    2a01:3f7:2:62::10           0   0     0     +0.000   2000.000     +0ns  4000ms
+    nts1.time.nl               14   5   654     -0.000      0.246   -131us    49us
+
+
+
+As an early deployer you need to follow the developments of the
+specification.  If your setup does not seem to connect to another
+secure timeserver (e.g. nts.ntp.se in the above sourcestats dump) it
+may well be that you are using an implementation that is incompatible
+with a change in version 26 of the Internet Draft.
+
+Double check whether you have installed a recent source  and that you have
+configured appropriate port.
+
+For exapmle: In an earlier version of this document I used a different repository
+for chrony that did not get updated after the change in spec. The
+earlier version also had an example file that used different port
+numbers for the Swedish NTS servers, they run the newer versions on
+port 3443.
 
 
 ###Capturing NTPS data###
@@ -510,7 +540,7 @@ configuration.
 
 [5 minute guide]: https://ava.upuaut.net/?p=951 "5 minute guide to making a GPS Locked Stratum 1 NTP Server with a Raspberry Pi"
 [APNIC blog by Martin Langer]: https://blog.apnic.net/2019/11/08/network-time-security-new-ntp-authentication-mechanism/ "Network Time Security: new NTP authentication mechanism"
-[Chrony NTS GIT repository]: https://github.com/mlichvar/chrony-nts "Chrony NTS repository"
+[Chrony GIT repository]: https://git.tuxfamily.org/chrony/chrony.git "Chrony repository"
 [Device Trees]: https://www.raspberrypi.org/documentation/configuration/device-tree.md "Device Trees"
 [Network Time Foundation Stratum-1-Microserver HOWTO]]: https://www.ntpsec.org/white-papers/stratum-1-microserver-howto "Stratum-1-Microserver HOWTO"
 [Rasberry Pi as a stratum 1 NTP server]: https://www.satsignal.eu/ntp/Raspberry-Pi-NTP.html "The Raspberry Pi as a Stratum-1 NTP Server"
