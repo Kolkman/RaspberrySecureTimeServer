@@ -483,6 +483,24 @@ Load the capture file into wireshark. To my knowledge there are no
 discectors yet.
 
 
+### Testing if you are using NTS whith servers ###
+
+Chronyc's authdata command is your friend. Here I am running iton a
+different host to test if my setup actually works:
+
+	sudo chronyc authdata -a
+	Name/IP address             Mode KeyID Type KLen Last Atmp  NAK Cook CLen
+	=========================================================================
+	timemaster.evangineer.net    NTS     2   15  256  69m    0    0    8  100
+	time.cloudflare.com          NTS     1   15  256  81m    0    0    8  100
+	2a01:3f7:2:202::202          NTS     1   15  256  81m    0    0    8  100
+	ntsts.sth1.ntp.se            NTS     1   15  256  73m    0    0    8  100
+	2a01:3f7:2:62::11            NTS     1   15  256  82m    0    0    8  100
+	nts1.time.nl                 NTS     1   15  256  82m    0    0    8  104
+
+
+
+
 ## Background reading ##
 
 There are a great many resources that will help you to get up to speed
