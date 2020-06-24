@@ -1,0 +1,20 @@
+  
+
+[Unit]
+Description=Chrony NTP date setting, using Chrony NTP client/server
+After=network.target
+ConditionCapability=CAP_SYS_TIME
+
+
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/chronyd -q 'pool pool.ntp.org iburst'
+ExecStart=/bin/rm /run/chrony/chronyd.pid
+RemainAfterExit=yes
+
+
+
+[Install]
+Alias=chronydate.service
+WantedBy=chronyd.service
