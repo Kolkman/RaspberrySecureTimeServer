@@ -18,7 +18,7 @@ Hardware assembly is straightforward: plug the gpio header on top of the raspber
 
 ## Initial configuration ##
 
-The initial conviguration described here is based on the raspbian release from september 2019. We asume the reader know how to set up a pi system.
+The initial conviguration described here is based on the raspbian release from september 2019 now updated to 2026 (trixie). We asume the reader know how to set up a pi system.
 
 This setup boots from an NFS mount, not to wear out the SD.
 
@@ -35,7 +35,7 @@ Here we mostly follow [Network Time Foundation Stratum-1-Microserver HOWTO][]. A
 
 First we have to make sure so that there is no interference between the different components on the serial bus.
 
-Add the following line to `/boot/config.txt` to disable bluetooth.
+Add the following line to `/boot/firmware/config.txt` to disable bluetooth.
 
     # Disable Bluetooth so serial-tty speed is no longer tied to CPU speed
     dtoverlay=pi3-disable-bt
@@ -51,7 +51,7 @@ KERNEL=="ttyAMA0", SYMLINK+="gps0", MODE="0666"
 KERNEL=="pps0", SYMLINK+="gpspps0", MODE="0666"
 
 
-Edit the file `/boot/cmdline.txt`, and remove the following from the single line in the file:
+Edit the file `/boot/firmaware/cmdline.txt`, and remove the following from the single line in the file:
 
     console=serial0,115200
 
@@ -66,23 +66,10 @@ file:
 
 
 
-Also you want to disable any powersaving features of the CPU, anything that makes the system run more predictable helps clock stability.
+Also you want to disable any powersaving features of the CPU, anything that makes the system run more predictable helps clock stability. Add the following line to `/etc/rc.local` (create it if it doesn't exist)
 
-    $ cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor
-    ondemand
-    ondemand
-    ondemand
-    ondemand
-    $ sudo sh -
-    # echo 'GOVERNOR="performance"' > /etc/default/cpufrequtils
-	# systemctl restart cpufrequtils
-	# exit
-	$ cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor
-	performance
-    performance
-    performance
-    performance
-    $
+    $ echo performance | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor
+    
 
 
 ### GPS PPS signal ###
@@ -91,7 +78,7 @@ When you boot the system and your antenna is in a place where it will 'see satel
 
     dtoverlay=pps-gpio,gpiopin=18
 
-to `/boot/config.txt`
+to `/boot/firmware/config.txt`
 
 This uses the [Device Trees][] mechanism to signal the kernel to load the PPS-GPIO driver and find the PPS signal on pin 18.
 
