@@ -1,5 +1,8 @@
 # RaspberrySecureTimeServer
 
+THIS IS OUT OF DATE 
+
+
 * Building-a-Raspberry-Secure-Timeserver is a howto/log on how to
   build a raspberry pi based secure timeserver.
 
