@@ -26,9 +26,7 @@ After clean install, enabling of SSH,  and the midration of the root system to N
 
 There is a bunch of software that needs  to be installed in order to perform all tasks below.
 
-    $ sudo apt-get install pps-tools git scons libncurses-dev python-dev \
-    bc libcap-dev nettle-dev libgnutls28-dev libreadline-dev bison \
-	asciidoctor cpufrequtils certbot  pps-tools
+    $  sudo apt-get install pps-tools git scons libncurses-dev python3-dev bc libcap-dev nettle-dev libgnutls28-dev libreadline-dev bison asciidoctor linux-cpupower certbot  pps-tools
 
 
 ## Configuring GPS and PPS
